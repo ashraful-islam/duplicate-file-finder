@@ -189,12 +189,15 @@ func RemoveUniques(files []models.File) []models.File {
 
 				// add each only if not already added
 				if _, seen := seenFiles[files[i].Path]; !seen {
+					seenFiles[files[i].Path] = struct{}{}
 					duplicateFiles[count] = files[i]
 					count++
 				}
 
 				if _, seen := seenFiles[files[j].Path]; !seen {
 					duplicateFiles[count] = files[j]
+					// add this file to seen files map
+					seenFiles[files[j].Path] = struct{}{}
 					count++
 				}
 
