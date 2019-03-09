@@ -9,6 +9,13 @@ import (
   "github.com/ashraful-islam/duplicate-file-finder/models"
 )
 
+type ProcessResult struct {
+  NumScannedFiles int64
+  NumDuplicateFiles int64
+  SizeScannedFiles int64
+  SizeDuplicateFiles int64
+}
+
 func main() {
   var rootPath string
 
@@ -23,10 +30,23 @@ func main() {
     os.Exit(0)
   }
 
-  filesBucket := make(map[string][]models.File)
-  var fileCount int64
-  var totalSize int64
+  // start processing
+  result := Process(rootPath)
 
+  // display small statistics
+  fmt.Println("Result Statistics:")
+  fmt.Println("-- Scanned:")
+  fmt.Println("Files Found:", result.NumScannedFiles)
+  fmt.Println("Size(bytes):", result.SizeScannedFiles)
+  fmt.Println("-- Duplicates:")
+  fmt.Println("Files Found:", result.NumDuplicateFiles)
+  fmt.Println("Size(bytes):", result.SizeDuplicateFiles)
+}
+
+func Process(rootPath string) ProcessResult {
+
+  filesBucket := make(map[string][]models.File)
+  result := ProcessResult{}
   // log start
   fmt.Println("[info] Searching for duplicates in: ", rootPath)
   fmt.Println("[status] Processing (this may take some time)")
@@ -70,16 +90,14 @@ func main() {
     }
     // add to bucket
     filesBucket[hash] = append(filesBucket[hash], fileEntry)
-    fileCount++
-    totalSize = totalSize + info.Size()
+    result.NumScannedFiles++
+    result.SizeScannedFiles = result.SizeScannedFiles + info.Size()
     
     return nil
   })
   util.CheckErr(err)
 
-  // log progress
-  fmt.Println("[status] Search Statistics: Files Scanned",fileCount," Disk Space:",totalSize)
-  
+  // log some info
   fmt.Println("[status] Checking for duplicates (this will take some time)")
 
 
@@ -105,6 +123,11 @@ func main() {
     count := len(files)
 
     if count > 1 {
+
+      // duplicate files count
+      result.NumDuplicateFiles += int64(count)
+
+      // display stats
       fmt.Println("----")
       fmt.Println("Duplicate Group: ", count)
       for _, file := range files {
@@ -113,9 +136,14 @@ func main() {
         fmt.Println("Path: ", file.Path)
         fmt.Println("Hash: ", file.FullHash)
         fmt.Println("")
+
+        // cumulative size used by duplicate files
+        result.SizeDuplicateFiles += file.Size
       }
     }
   }
 
   fmt.Println("[status] Done!")
+
+  return result
 }
