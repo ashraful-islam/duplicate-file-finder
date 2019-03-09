@@ -3,6 +3,7 @@ package main
 import "testing"
 
 var testDir string = "test_data"
+var processResult ProcessResult
 
 func TestProcess(t *testing.T) {
 
@@ -44,7 +45,17 @@ func TestProcess(t *testing.T) {
 }
 
 func BenchmarkProcess(b *testing.B) {
+
+	var result ProcessResult
+
 	for n := 0; n < b.N; n++ {
-		Process(testDir)
+		// storing result here will eliminate compiler removing
+		// this function call altogether
+		result = Process(testDir)
 	}
+
+	// storing the result in package level variable will
+	// mitigate elimination of the benchmark function itself by compiler
+	// src: https://dave.cheney.net/2013/06/30/how-to-write-benchmarks-in-go#compiler-optimisation
+	processResult = result
 }
