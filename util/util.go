@@ -61,19 +61,6 @@ func GetFullHash(filePath string, fileSize int64) (string, error) {
 
 	var err error
 	var hash string
-	var chunkSize int64
-
-	// size related calculation
-	numCompleteChunks := fileSize / FILE_CHUNK_SIZE
-	subChunkSize := fileSize - (numCompleteChunks * FILE_CHUNK_SIZE)
-	
-	if numCompleteChunks > 0 {
-		chunkSize = FILE_CHUNK_SIZE
-	} else {
-		chunkSize = subChunkSize
-	}
-	
-	dataBuf := make([]byte, chunkSize)
 
 	f, err := os.Open(filePath)
 	defer f.Close()
@@ -85,50 +72,7 @@ func GetFullHash(filePath string, fileSize int64) (string, error) {
 
 	hasher := md5.New()
 
-	for {
-
-		// all done
-		if numCompleteChunks == 0 && subChunkSize == 0 {
-			break
-		}
-
-		// last read left or tiny file
-		if numCompleteChunks == 0 && subChunkSize > 0 {
-			chunkSize = subChunkSize
-			subChunkSize = 0 // reset
-		}
-
-		n, err := f.Read(dataBuf)
-
-		if err != nil {
-
-			if err != io.EOF {
-				err = fmt.Errorf("E_FH_02] file read failed: %v", err.Error())
-			} else {
-				// reset to nil as EOF is not proper error
-				err = nil
-			}
-
-			break
-		}
-
-		// handle partial reads
-		if int64(n) != chunkSize {
-			err = fmt.Errorf("[E_PH_03] partial read error, expected: %v but only %v was read", chunkSize, n)
-			break
-		}
-
-		// reduce counters
-		if numCompleteChunks != 0 {
-			numCompleteChunks--
-		}
-
-		// re calculate hash on each iteration
-		hasher.Write(dataBuf)
-	}
-	
-	// some error occured continue
-	if err != nil {
+	if _, err = io.Copy(hasher, f); err != nil {
 		return hash, err
 	}
 
@@ -168,21 +112,41 @@ func RemoveUniques(files []models.File) []models.File {
 
 			// no complete hash available yet
 			if !files[i].HasHashes() {
-				fullHash, err := GetFullHash(files[i].Path, files[i].Size)
-				if err != nil {
-					fmt.Printf("[E_RU01] %v", err.Error())
-					break
+
+				// when file size is tiny, partial hash is full hash
+				if files[i].Size <= FILE_CHUNK_SIZE {
+
+					files[i].FullHash = files[i].PartHash
+
+				} else {
+
+					fullHash, err := GetFullHash(files[i].Path, files[i].Size)
+					if err != nil {
+						fmt.Printf("[E_RU01] %v", err.Error())
+						break
+					}
+
+					files[i].FullHash = fullHash
+
 				}
-				files[i].FullHash = fullHash
 			}
 
 			if !files[j].HasHashes() {
-				fullHash, err := GetFullHash(files[j].Path, files[j].Size)
-				if err != nil {
-					fmt.Printf("[E_RU02] %v", err.Error())
-					break
+
+				if files[j].Size <= FILE_CHUNK_SIZE {
+
+					files[j].FullHash = files[j].PartHash
+
+				} else {
+
+					fullHash, err := GetFullHash(files[j].Path, files[j].Size)
+					if err != nil {
+						fmt.Printf("[E_RU02] %v", err.Error())
+						break
+					}
+					files[j].FullHash = fullHash
+
 				}
-				files[j].FullHash = fullHash
 			}
 
 			if files[i].IsEql(files[j]) {
